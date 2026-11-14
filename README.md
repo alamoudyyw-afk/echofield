@@ -58,7 +58,7 @@ Radar cannot name the crop. Both channels respond to moisture, roughness and veg
 
 ## Use of AI
 
-Claude helped with research, the Python analysis code, the website code and drafting text. ChatGPT helped review the code and lay out the slides. All analysis was run, checked and interpreted by the author, who made the visual field checks and the design decisions.
+Claude helped with research, the Python analysis code, the website code and drafting text. 
 
 ## License
 
