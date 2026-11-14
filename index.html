@@ -5,11 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Echofield: radar that watches desert farms change</title>
 <!--
-  Echofield, NASA Space Apps Challenge 2026, challenge: Dancing with the SARs.
-  Team: Waselah (Waselah AlAmoudi), Jeddah.
-  AI disclosure: the HTML, CSS and JavaScript of this page were written with
-  the help of an AI assistant (Claude). The analysis choices, the reading of
-  the results and the design decisions are the author's.
+  
 -->
 <style>
   :root {
@@ -208,7 +204,7 @@
 </main>
 
 <script>
-// The nine dates, in order. "file" is used in the image name, "show" is what people read.
+
 const dates = [
   { file: "2026-06-19", show: "Jun 19, 2026" },
   { file: "2026-07-01", show: "Jul 1, 2026" },
@@ -226,13 +222,13 @@ const label = document.getElementById("label");
 const season = document.getElementById("season");
 const play = document.getElementById("play");
 
-// Load every image once at the start so the slider does not flicker.
+
 dates.forEach(function (d) {
   const img = new Image();
   img.src = "hv_" + d.file + ".png";
 });
 
-// Show the date that matches the slider. The slider counts from 1, the array from 0.
+
 function showDate() {
   const d = dates[slider.value - 1];
   label.textContent = d.show;
@@ -240,7 +236,7 @@ function showDate() {
 }
 slider.addEventListener("input", showDate);
 
-// Play button: step forward one date every 0.8 seconds, and loop.
+
 let timer = null;
 play.addEventListener("click", function () {
   if (timer) {
@@ -256,7 +252,7 @@ play.addEventListener("click", function () {
   }, 800);
 });
 
-// Before and after: hide part of the June image so October shows through.
+.
 const cmp = document.getElementById("cmp");
 const topImg = document.getElementById("top");
 cmp.addEventListener("input", function () {
