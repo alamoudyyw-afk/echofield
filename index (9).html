@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Echofield: radar that watches desert farms change</title>
+<!--
+  Echofield, NASA Space Apps Challenge 2026, challenge: Dancing with the SARs.
+  Team: Waselah (Waselah AlAmoudi), Jeddah.
+  
+-->
+<style>
+  :root {
+    --bg: #0e1410;
+    --panel: #151d17;
+    --line: #26332a;
+    --text: #e8efe6;
+    --muted: #9fb0a0;
+    --grow: #c8f031;   /* vegetation gained */
+    --lost: #6ec6ff;   /* vegetation lost */
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    line-height: 1.6;
+  }
+  main { max-width: 980px; margin: 0 auto; padding: 0 20px 80px; }
+  header { padding: 72px 0 40px; border-bottom: 1px solid var(--line); }
+  .kicker { color: var(--grow); letter-spacing: 0.14em; text-transform: uppercase; font-size: 13px; }
+  h1 { font-size: clamp(44px, 9vw, 84px); margin: 8px 0 12px; letter-spacing: -0.02em; line-height: 1; }
+  h1 span { color: var(--grow); }
+  .lead { font-size: 20px; color: var(--text); max-width: 720px; }
+  .meta { color: var(--muted); font-size: 14px; margin-top: 18px; }
+  h2 { font-size: 28px; margin: 64px 0 8px; }
+  h3 { font-size: 18px; margin: 0 0 6px; }
+  p { margin: 10px 0; }
+  .muted { color: var(--muted); }
+  .grow { color: var(--grow); }
+  .lost { color: var(--lost); }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-top: 18px; }
+  .radar { width: 100%; display: block; border-radius: 8px; }
+  .controls { display: flex; align-items: center; gap: 14px; margin-top: 14px; flex-wrap: wrap; }
+  .date { font-size: 22px; font-weight: 600; color: var(--grow); min-width: 150px; }
+  input[type=range] { flex: 1; min-width: 180px; accent-color: var(--grow); }
+  button {
+    background: var(--grow); color: #10160f; border: 0; border-radius: 999px;
+    padding: 9px 18px; font-weight: 600; font-size: 15px; cursor: pointer;
+  }
+
+  .compare { position: relative; }
+  .compare img { width: 100%; display: block; border-radius: 8px; }
+  .compare .top { position: absolute; left: 0; top: 0; }
+  .tags { display: flex; justify-content: space-between; font-size: 14px; color: var(--muted); margin-top: 8px; }
+
+  .numbers { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-top: 18px; }
+  .num { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+  .num b { display: block; font-size: 34px; line-height: 1.1; color: var(--grow); }
+  .num.b b { color: var(--lost); }
+  .num span { color: var(--muted); font-size: 14px; }
+
+  .chart { background: #fff; border-radius: 10px; padding: 8px; margin-top: 12px; }
+  .chart img { width: 100%; display: block; }
+  .key { display: flex; gap: 18px; flex-wrap: wrap; font-size: 14px; margin-top: 10px; }
+  .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+  ul { padding-left: 20px; }
+  li { margin: 6px 0; }
+  .cm { width: 100%; border-collapse: collapse; text-align: center; }
+  .cm th, .cm td { border: 1px solid var(--line); padding: 10px; }
+  .cm th { font-weight: 600; font-size: 14px; }
+  .cm td { font-size: 28px; font-weight: 700; }
+  .cm td.ok { color: var(--grow); }
+  .cm td.hi { color: var(--lost); }
+  .cm.sens td { font-size: 16px; font-weight: 500; }
+  .cm.sens tr.used td { color: var(--grow); font-weight: 700; }
+  .cm.sens th { text-align: center; }
+  .explorer { display: grid; grid-template-columns: 2fr 3fr; gap: 20px; align-items: start; }
+  .map { position: relative; }
+  .map img { width: 100%; display: block; border-radius: 8px; }
+  .map svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .map circle { fill: rgba(200,240,49,0.08); stroke: #c8f031; stroke-width: 3; cursor: pointer; }
+  .map circle.on { fill: rgba(200,240,49,0.35); stroke: #fff; stroke-width: 6; }
+  .map text { fill: #fff; font-size: 26px; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+  #fchart { width: 100%; display: block; margin-top: 10px; }
+  #fchart text { fill: var(--muted); font-size: 13px; font-family: inherit; }
+  select { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 15px; }
+  @media (max-width: 760px) { .explorer { grid-template-columns: 1fr; } }
+  footer { margin-top: 72px; padding-top: 24px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+  a { color: var(--grow); }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <div class="kicker">NASA Space Apps Challenge 2026 · Dancing with the SARs</div>
+  <h1>Echo<span>field</span></h1>
+  <p class="lead">Radar from space, watching desert farms switch on and off. Echofield uses NASA-ISRO NISAR radar to show which fields in northern Saudi Arabia grew, which were cut, and when.</p>
+  <p class="meta">Team Waselah · Waselah AlAmoudi · Jeddah, Saudi Arabia</p>
+  <img src="context.png" alt="Center-pivot farms of the Basaita area, Al Jouf, seen from space" style="width:100%;display:block;border-radius:14px;margin-top:28px;">
+  <p class="muted" style="font-size:13px;margin-top:6px;">The Basaita farms in Al Jouf. Imagery: Google Earth, 2021. This photo shows the area for context only and is not part of the radar analysis.</p>
+</header>
+
+<section>
+  <h2>Research question</h2>
+  <p>Al Jouf is called the breadbasket of Saudi Arabia. Its center-pivot farms draw on groundwater that does not refill, so knowing which fields are active, and when, matters for water and food security. This project asks whether spaceborne radar can show when these farms are active, and whether it can show something that an ordinary satellite photograph cannot.</p>
+</section>
+
+<section>
+  <h2>The season in one field</h2>
+  <div class="numbers">
+    <div class="num"><b>Jul 25</b><span>NISAR: the field's HV radar signal peaks, then falls 5.9 dB by August 18</span></div>
+    <div class="num b"><b>0.53 → 0.29</b><span>NASA HLS optical NDVI, taken 0 to 1 day from each radar pass, falls in the same window</span></div>
+    <div class="num"><b>2 sensors</b><span>independently show the same decline; harvest is the likely cause</span></div>
+  </div>
+  <p class="muted">This is the example field followed in the timeline and optical sections below. To see any of the 38 confirmed fields the same way, use the <a href="#explorer">field explorer</a>.</p>
+</section>
+
+<section>
+  <h2>Study area and data</h2>
+  <p>The study area is a 20 km by 20 km window of center-pivot farms in the Basaita area of Al Jouf, near Tubarjal. The data is NISAR L-band Level 2 GCOV, taken from a single viewing geometry (track 71, frame 17, ascending) so that every date is seen from the same angle. Each pixel covers 20 m, and there are two channels, HH and HV. Both respond to a mix of soil moisture, surface roughness and vegetation. HV is more sensitive to vegetation volume, and HH more to the surface.</p>
+</section>
+
+<section>
+  <h2>Seasonal radar record, June to October 2026</h2>
+  <p class="muted">Nine NISAR acquisitions of the same area in the HV channel. Brighter usually means more vegetation, although wet or rough ground also brightens the image. Move the slider or press play.</p>
+  <div class="panel">
+    <img id="season" class="radar" src="hv_2026-06-19.png" alt="NISAR HV radar image of the farm area">
+    <div class="controls">
+      <div id="label" class="date">Jun 19, 2026</div>
+      <input type="range" id="slider" min="1" max="9" value="1" aria-label="Choose a date">
+      <button id="play">Play</button>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Two-date comparison</h2>
+  <p class="muted">Drag to compare the first acquisition, June 19, with the last, October 17.</p>
+  <div class="panel">
+    <div class="compare">
+      <img src="hv_2026-10-17.png" alt="NISAR HV image, October 17 2026">
+      <img id="top" class="top" src="hv_2026-06-19.png" alt="NISAR HV image, June 19 2026" style="clip-path: inset(0 50% 0 0);">
+    </div>
+    <div class="controls">
+      <input type="range" id="cmp" min="0" max="100" value="50" aria-label="Compare the two dates">
+    </div>
+    <div class="tags"><span>June 19 on the left</span><span>October 17 on the right</span></div>
+  </div>
+</section>
+
+<section>
+  <h2>Change detection</h2>
+  <p>The two dates are subtracted in decibels, which is the same as taking the ratio of the two echo powers. To separate real change from noise, the noise was measured over empty desert, where nothing should change, and found to be 0.50 dB. A pixel is counted as changed only if it moved by more than 1.5 dB, three times that amount. The desert stays black in the map, which shows that the method is not inventing change.</p>
+  <div class="panel">
+    <img class="radar" src="change.png" alt="Change map between June 19 and October 17">
+    <div class="key">
+      <span><i class="dot" style="background:var(--grow)"></i>HV increased</span>
+      <span><i class="dot" style="background:var(--lost)"></i>HV decreased</span>
+      <span><i class="dot" style="background:#000;border:1px solid var(--line)"></i>no change</span>
+    </div>
+  </div>
+
+  <div class="numbers">
+    <div class="num"><b>33</b><span>regions where HV increased</span></div>
+    <div class="num b"><b>19</b><span>regions where HV decreased</span></div>
+    <div class="num"><b>24.6 km²</b><span>area where HV increased</span></div>
+    <div class="num b"><b>13.3 km²</b><span>area where HV decreased</span></div>
+  </div>
+  <p>A region here is a connected group of changed pixels larger than 12 hectares. Regions are not checked against field boundaries, so one region can cover part of a field or join neighbouring fields; the counts are regions, not fields. This map also compares only the first and last dates. A field that grew and was cut in between ends where it started, so it shows as black even though a lot happened there. For that reason Echofield also follows individual fields through every date.</p>
+</section>
+
+<section>
+  <h2>Field-level time series</h2>
+  <p>Two example areas are followed here: the largest region where HV increased and the largest where it decreased. Each sits on a single center-pivot field in the radar image. Each point is the average of every pixel inside the area, measured against the desert on the same date. Averaging a whole field removes most of the speckle noise and gives one reliable value per field per date.</p>
+  <div class="chart"><img src="timeline_corrected.png" alt="Season timeline of two fields"></div>
+  <p>The <span class="lost">field that lost vegetation</span> dropped by 5.9 dB between July 25 and August 18, a fast change that is consistent with harvest, although radar alone cannot confirm the cause. The <span class="grow">field that gained vegetation</span> was flat until July 1 and then rose steadily to a peak on September 11. The rise is gradual and the fall is abrupt, and the radar record shows both.</p>
+</section>
+
+<section>
+  <h2>What radar adds to a photograph</h2>
+  <p>Skies over Al Jouf are usually clear, so seeing through cloud is not the main advantage here. The advantage is that radar records two signals where a photograph records one, and the two respond to different things.</p>
+  <p>Radar is most sensitive to two properties of the ground: roughness and the dielectric constant. Water has a very high dielectric constant, so wetting the soil makes it reflect more strongly. Leaves and stems scatter the signal in many directions and change its polarization, which adds to HV in particular. Both channels respond to all three effects, moisture, roughness and vegetation, but in different proportions, so comparing their timing gives a clue to what changed first.</p>
+  <div class="chart"><img src="two_channels.png" alt="HH and HV channels for the field that gained"></div>
+  <p>On the field that grew, HH was close to its maximum by July 25. HV did not peak until September 11, about seven weeks later. One possible reading is a change in soil moisture or surface condition, such as irrigation or tillage, before the vegetation developed. This has not been tested independently, so it is a hypothesis rather than a finding.</p>
+</section>
+
+<section>
+  <h2>Active vegetated area</h2>
+  <div class="chart"><img src="active_area.png" alt="Active vegetated area per date"></div>
+  <p>Counting pixels more than 4 dB above the desert as vegetated, active area in the window grew from 19.4 km² on June 19 to 29.1 km² on October 5. The exact size depends on where that line is drawn, so the result was tested at 3 dB and 5 dB as well. The growth held at all three settings, between about one third and two thirds. Buildings, which are always very bright in the HH channel, were excluded.</p>
+</section>
+
+<section>
+  <h2>Automatic field detection</h2>
+  <p>Instead of choosing fields by hand, Echofield finds the circular fields itself. For every pixel it takes the most vegetated value reached during the season, so every field that was farmed at any point shows up as a bright disc. An edge detector traces the outlines of those discs, and a Hough circle transform searches the outlines for circles between 0.6 and 1.2 km across. A circle is kept only if its inside was vegetated at some point in the season.</p>
+  <div class="chart"><img src="fields_detected.png" alt="Circular fields detected automatically"></div>
+  <p>The detector proposed 55 candidate circles. Each was checked by eye against fixed rules, rejecting any circle that sat on a rectangular plot, did not sit on a field, overlapped another circle, or was much smaller than its field. 38 passed. Measured against this visual check, the detector's precision is 69% (38 of 55). To estimate recall, every circular field in a 6 km by 6 km sample box was counted by eye on the season-maximum image: about 18 fields, of which the confirmed detections found 8, a recall of about 44%. The detector is therefore fairly precise but misses more than half of the fields, so the field counts describe the detected fields, not every field in the window. Following the confirmed fields through the season, the number of active fields rose from 4 on June 19 to a peak of 17 on October 5. This agrees with the area result above, measured a different way. Chartreuse circles were active on October 17 and sky blue circles were not.</p>
+  <p class="muted">The detector does not find every field. It misses fields that touch their neighbours and fields with faint or patchy edges, and a few circles overlap or sit inside a larger field. The counts are best read as a trend for the detected fields, not a full census.</p>
+</section>
+
+<section>
+  <h2>Optical validation</h2>
+  <p>To test whether the radar signal follows real vegetation, it was compared with an independent sensor. NASA's Harmonized Landsat and Sentinel-2 (HLS) product gives optical images of the same farms, and from those NDVI was computed, a standard measure of how green a field is. For each radar date the analysis used the clearest optical scene within 6 days. All 9 dates were matched to a cloud-free scene taken 0 to 1 day from the radar pass, and NDVI was sampled at exactly the same pixels as the radar.</p>
+  <div class="chart"><img src="ndvi_validation.png" alt="Radar HV and optical NDVI for the two example fields"></div>
+  <p>On the <span class="lost">field that lost vegetation</span>, both sensors peak on July 25 and drop by August 18, with NDVI falling from 0.53 to 0.29. Two independent sensors therefore agree that the vegetation declined in that window. That is strong evidence of a decline, and harvest is the most likely cause, but neither sensor can show what caused it. On the <span class="grow">field that gained vegetation</span>, NDVI rose from 0.19 to 0.48 and peaked in late August, then fell to about 0.2, while radar stayed high until October 5. One likely explanation, not yet tested, is that the crop matured and dried. It would then lose its green colour while keeping the structure that radar responds to.</p>
+  <div class="chart"><img src="ndvi_scatter.png" alt="Radar HV against NDVI for all confirmed fields and dates"></div>
+  <p>Pooling the 38 confirmed fields and 9 dates (342 field-date pairs), radar and NDVI have a Spearman correlation of 0.50, a moderate positive relationship. Because the 342 pairs repeat the same 38 fields, the correlation was also computed for each field on its own: 37 of the 38 fields are positive, with a median of 0.72. Within a field, radar and NDVI rise and fall together; the pooled value is lower mainly because fields sit at different levels. Classified as active or inactive (radar above 4 dB, NDVI above 0.3), the two agree 58% of the time. Most disagreements are fields that look green optically but stay below 4 dB in radar. L-band has a long wavelength and passes through short or young plants, so it sees little vegetation there. The two sensors agree on direction and timing and differ where they measure different things: greenness for NDVI, structure and water for radar. The 4 dB threshold was set from the radar before this check and was not adjusted to match NDVI.</p>
+  <h3 style="margin-top:28px;">Validation results</h3>
+  <div class="numbers">
+    <div class="num"><b>342</b><span>field-date pairs (38 fields × 9 dates)</span></div>
+    <div class="num"><b>0.50</b><span>Spearman ρ, all pairs pooled</span></div>
+    <div class="num"><b>0.72</b><span>median ρ per field (37 of 38 positive)</span></div>
+    <div class="num b"><b>58%</b><span>active or inactive agreement</span></div>
+  </div>
+  <div class="panel">
+    <table class="cm">
+      <tr><th></th><th>Optical: green<br><span class="muted">NDVI above 0.3</span></th><th>Optical: not green<br><span class="muted">NDVI 0.3 or below</span></th></tr>
+      <tr><th>Radar: active<br><span class="muted">HV above 4 dB</span></th><td class="ok">79</td><td>9</td></tr>
+      <tr><th>Radar: not active<br><span class="muted">HV 4 dB or below</span></th><td class="hi">134</td><td class="ok">120</td></tr>
+    </table>
+    <p class="muted" style="margin-top:12px;">Taking optical as the reference (it is a second sensor, not ground truth), radar has 9 false positives: fields it called active that did not look green. It has 134 misses: fields that looked green but stayed below 4 dB. So when radar calls a field active, optical agrees 79 of 88 times (90%), but radar catches only 79 of the 213 green cases (37%). The 58% agreement is low because the misses dominate, not because radar raises false alarms. Allowing for agreement expected by chance, Cohen's kappa is 0.25.</p>
+  </div>
+  <div class="panel">
+    <h3>How agreement depends on the radar threshold</h3>
+    <p class="muted">Same 342 pairs, NDVI threshold fixed at 0.3. The 4 dB threshold was chosen from the radar curves before this comparison and is kept; the other rows show the trade-off, not a new choice.</p>
+    <table class="cm sens">
+      <tr><th>Radar threshold</th><th>Agreement</th><th>False positives</th><th>Misses</th><th>Kappa</th></tr>
+      <tr><td>HV above 2 dB</td><td>73%</td><td>37</td><td>55</td><td>0.44</td></tr>
+      <tr><td>HV above 3 dB</td><td>65%</td><td>18</td><td>103</td><td>0.33</td></tr>
+      <tr class="used"><td>HV above 4 dB (used)</td><td>58%</td><td>9</td><td>134</td><td>0.25</td></tr>
+      <tr><td>HV above 5 dB</td><td>53%</td><td>3</td><td>158</td><td>0.19</td></tr>
+    </table>
+    <p class="muted" style="margin-top:12px;">Lowering the radar threshold catches more green fields but adds false positives, and below about 2 dB it would approach the 1 to 2 dB level of bare and harvested fields, where wet or rough soil alone could cross it. Changing the NDVI threshold to 0.2 or 0.4 at 4 dB gives 50% and 60%. The comparison therefore shows that L-band HV at 4 dB is a conservative indicator of green vegetation: reliable when it says active, but it misses many green fields, especially short or young crops.</p>
+  </div>
+</section>
+
+<section id="explorer">
+  <h2>Field explorer</h2>
+  <p class="muted">Choose any of the 38 confirmed fields, on the map or from the list, to see its full radar and optical record.</p>
+  <div class="panel explorer">
+    <div class="map">
+      <img src="explorer_bg.png" alt="NISAR HV image, October 17 2026, with the 38 confirmed fields marked">
+      <svg id="fmap" viewBox="0 0 1000 1000" aria-label="Map of confirmed fields"></svg>
+    </div>
+    <div class="plot">
+      <div class="controls" style="margin-top:0;">
+        <label for="fsel">Field</label>
+        <select id="fsel"></select>
+        <label><input type="checkbox" id="showhh" checked> show HH</label>
+      </div>
+      <svg id="fchart" viewBox="0 0 640 380" role="img" aria-label="Radar and NDVI time series for the selected field"></svg>
+      <div class="key">
+        <span><i class="dot" style="background:var(--grow)"></i>HV above desert (dB)</span>
+        <span><i class="dot" style="background:var(--lost)"></i>HH above desert (dB)</span>
+        <span><i class="dot" style="background:#fff"></i>optical NDVI (dashed, right axis)</span>
+      </div>
+      <p id="fstat" class="muted"></p>
+    </div>
+  </div>
+  <p class="muted">Radar values here are field averages in decibels, the same values used in the validation, so they can sit slightly below the field timelines above. Some fields, such as field 16, rise in radar while NDVI stays at bare-soil values. That is consistent with a change in soil moisture or roughness without green vegetation, but it has not been checked on the ground.</p>
+</section>
+
+
+<section>
+  <h2>Method</h2>
+  <p>Only the farm window is read from NASA's cloud archive, so each date loads in about 20 seconds without downloading the full 1.8 GB file. Speckle is reduced with a 5 by 5 average and values are converted to decibels. Every date is measured against the same patch of empty desert, which removes small offsets between acquisitions. The analysis is written in Python and runs in Google Colab.</p>
+</section>
+
+<section>
+  <h2>Limitations</h2>
+  <p>Radar shows how much vegetation is present and when it changes, but it cannot identify the crop. NISAR revisits every 12 days and the August 6 pass is missing, so an event can only be dated to a window. The September 23 acquisition has no HV channel and was left out. The HH channel also responds to growing stalks, so it is not a pure water signal. The products are provisional, and L-band is weak at detecting very young, short crops, which is the likely reason for most of the disagreement with NDVI. Some large bright rectangular plots, possibly greenhouses or orchards, are counted as active area; they raise the absolute area but do not change the trend. The main winter wheat season falls outside this June to October window. The study covers one 20 km by 20 km sample of the Basaita farms, not all of Al Jouf.</p>
+</section>
+
+<section>
+  <h2>Next steps</h2>
+  <p>Many of these circular fields appear in the radar images to change in slices rather than all at once, so the next step is to track sectors inside each circle. After that come a more complete field detector that handles touching fields, and a full year of data.</p>
+  <p>Because NISAR images nearly all land every 12 days and its data is free, the same method could run across every farming region in Saudi Arabia. Water managers could use it to see which fields draw on groundwater and when, without relying on farmer surveys.</p>
+</section>
+
+<footer>
+  <p>Data: NASA-ISRO NISAR L2 GCOV provisional products, from the Alaska Satellite Facility DAAC through NASA Earthdata. Optical validation: NASA Harmonized Landsat and Sentinel-2 (HLS) surface reflectance, from the LP DAAC through NASA Earthdata. Tools: Python, h5py, rasterio, NumPy, SciPy, Matplotlib, earthaccess, Google Colab.</p>
+  
+  <p>Code: <a href="https://github.com/Alamoudyyw-afk/echofield">github.com/Alamoudyyw-afk/echofield</a></p>
+</footer>
+
+</main>
+
+<script>
+
+const dates = [
+  { file: "2026-06-19", show: "Jun 19, 2026" },
+  { file: "2026-07-01", show: "Jul 1, 2026" },
+  { file: "2026-07-13", show: "Jul 13, 2026" },
+  { file: "2026-07-25", show: "Jul 25, 2026" },
+  { file: "2026-08-18", show: "Aug 18, 2026" },
+  { file: "2026-08-30", show: "Aug 30, 2026" },
+  { file: "2026-09-11", show: "Sep 11, 2026" },
+  { file: "2026-10-05", show: "Oct 5, 2026" },
+  { file: "2026-10-17", show: "Oct 17, 2026" }
+];
+
+const slider = document.getElementById("slider");
+const label = document.getElementById("label");
+const season = document.getElementById("season");
+const play = document.getElementById("play");
+
+// Load every image once at the start so the slider does not flicker.
+dates.forEach(function (d) {
+  const img = new Image();
+  img.src = "hv_" + d.file + ".png";
+});
+
+
+function showDate() {
+  const d = dates[slider.value - 1];
+  label.textContent = d.show;
+  season.src = "hv_" + d.file + ".png";
+}
+slider.addEventListener("input", showDate);
+
+// Play button: step forward one date every 0.8 seconds, and loop.
+let timer = null;
+play.addEventListener("click", function () {
+  if (timer) {
+    clearInterval(timer);
+    timer = null;
+    play.textContent = "Play";
+    return;
+  }
+  play.textContent = "Pause";
+  timer = setInterval(function () {
+    slider.value = slider.value >= dates.length ? 1 : Number(slider.value) + 1;
+    showDate();
+  }, 800);
+});
+
+
+const cmp = document.getElementById("cmp");
+const topImg = document.getElementById("top");
+cmp.addEventListener("input", function () {
+  topImg.style.clipPath = "inset(0 " + (100 - cmp.value) + "% 0 0)";
+});
+
+// Field explorer: the data below was exported from the Colab notebook (fields.json).
+const FIELDS = {"dates":["2026-06-19","2026-07-01","2026-07-13","2026-07-25","2026-08-18","2026-08-30","2026-09-11","2026-10-05","2026-10-17"],"size":[1000,1000],"fields":[{"id":0,"x":33,"y":173,"r":20,"hv":[1.171,1.619,3.173,4.795,7.136,8.65,9.009,8.875,8.004],"hh":[3.498,4.576,7.112,9.088,11.368,13.09,12.855,11.284,10.097],"ndvi":[0.195,0.265,0.385,0.429,0.403,0.504,0.543,0.449,0.355]},{"id":1,"x":81,"y":186,"r":20,"hv":[5.824,7.263,8.49,8.852,2.54,1.527,1.399,1.021,1.021],"hh":[10.4,11.45,12.777,12.938,4.424,3.25,2.769,1.771,1.35],"ndvi":[0.331,0.443,0.506,0.555,0.284,0.261,0.24,0.197,0.173]},{"id":2,"x":244,"y":967,"r":18,"hv":[2.909,2.822,3.577,1.997,4.894,3.736,2.744,3.208,2.135],"hh":[6.781,7.014,6.982,4.996,9.17,7.963,6.701,6.872,4.626],"ndvi":[0.582,0.756,0.841,0.565,0.851,0.722,0.677,0.711,0.545]},{"id":3,"x":856,"y":658,"r":20,"hv":[0.094,0.238,0.386,0.229,0.66,5.074,6.524,7.704,8.327],"hh":[1.226,1.175,2.045,2.393,2.986,9.839,11.302,13.479,13.414],"ndvi":[0.168,0.149,0.148,0.13,0.215,0.483,0.675,0.739,0.755]},{"id":4,"x":891,"y":721,"r":18,"hv":[0.173,0.165,0.545,0.38,0.774,3.402,6.77,7.515,7.842],"hh":[1.515,1.172,2.145,2.352,2.563,7.066,9.904,12.239,12.772],"ndvi":[0.175,0.152,0.154,0.128,0.224,0.458,0.684,0.734,0.751]},{"id":5,"x":209,"y":904,"r":18,"hv":[2.826,2.149,3.509,1.743,2.875,3.486,2.088,2.515,1.595],"hh":[6.042,6.29,7.651,3.81,7.182,7.394,4.991,5.863,3.865],"ndvi":[0.666,0.7,0.865,0.393,0.854,0.735,0.632,0.701,0.507]},{"id":6,"x":568,"y":949,"r":22,"hv":[3.413,4.606,6.041,6.931,6.582,6.318,6.158,5.606,4.724],"hh":[7.781,8.238,10.144,10.873,10.968,10.847,10.527,9.494,7.284],"ndvi":[0.321,0.434,0.489,0.528,0.477,0.484,0.453,0.336,0.285]},{"id":7,"x":680,"y":927,"r":20,"hv":[4.396,4.909,3.619,1.951,1.288,1.271,1.748,1.057,1.547],"hh":[8.148,8.087,5.619,3.952,2.932,5.206,6.365,4.455,6.944],"ndvi":[0.849,0.86,0.477,0.582,0.419,0.671,0.845,0.638,0.781]},{"id":8,"x":41,"y":543,"r":20,"hv":[1.207,1.066,1.865,2.087,2.88,3.266,4.322,5.128,5.24],"hh":[2.458,2.044,3.801,4.348,4.899,4.975,6.311,7.387,7.298],"ndvi":[0.148,0.169,0.296,0.284,0.327,0.28,0.237,0.338,0.327]},{"id":9,"x":681,"y":716,"r":20,"hv":[1.223,3.467,2.625,3.151,3.702,4.084,4.451,5.228,5.046],"hh":[5.386,8.068,4.765,6.511,6.259,7.27,7.79,8.637,8.031],"ndvi":[0.472,0.51,0.26,0.493,0.333,0.573,0.634,0.683,0.689]},{"id":10,"x":87,"y":769,"r":20,"hv":[0.753,0.69,0.699,1.99,1.726,3.117,4.121,5.57,4.751],"hh":[1.135,1.274,1.346,5.389,4.431,6.943,7.358,7.16,6.197],"ndvi":[0.148,0.136,0.129,0.133,0.725,0.817,0.826,0.794,0.724]},{"id":11,"x":122,"y":830,"r":24,"hv":[0.628,0.591,0.677,1.217,1.856,3.034,4.388,6.849,5.853],"hh":[1.22,0.964,1.397,2.624,4.765,7.091,8.362,8.062,7.282],"ndvi":[0.142,0.138,0.144,0.149,0.778,0.817,0.832,0.802,0.738]},{"id":12,"x":559,"y":790,"r":18,"hv":[0.519,0.563,1.259,0.768,0.698,3.306,3.441,5.771,4.226],"hh":[1.073,1.0,4.294,3.911,2.475,6.026,6.145,7.304,5.764],"ndvi":[0.138,0.138,0.13,0.156,0.663,0.808,0.829,0.77,0.659]},{"id":13,"x":490,"y":240,"r":24,"hv":[2.979,4.421,2.888,2.086,3.038,2.551,2.162,2.601,2.462],"hh":[6.021,8.232,7.104,5.449,7.377,5.503,6.346,6.993,5.899],"ndvi":[0.676,0.878,0.761,0.598,0.828,0.626,0.854,0.784,0.733]},{"id":14,"x":563,"y":580,"r":20,"hv":[0.445,0.458,1.297,0.854,1.518,2.095,2.866,3.272,3.856],"hh":[1.385,1.087,4.919,2.829,4.102,5.509,6.231,5.864,6.65],"ndvi":[0.165,0.155,0.119,0.204,0.552,0.633,0.702,0.678,0.609]},{"id":15,"x":374,"y":319,"r":20,"hv":[1.083,0.84,3.173,5.861,7.928,8.464,8.665,8.457,5.372],"hh":[3.256,2.667,7.559,10.749,11.293,10.939,10.638,10.918,8.741],"ndvi":[0.242,0.227,0.332,0.419,0.618,0.632,0.572,0.303,0.218]},{"id":16,"x":916,"y":831,"r":24,"hv":[0.065,0.032,0.231,3.483,3.939,4.136,3.916,3.708,2.721],"hh":[1.075,0.746,1.135,7.977,9.035,8.944,8.559,8.635,7.333],"ndvi":[0.117,0.118,0.111,0.122,0.117,0.122,0.115,0.135,0.133]},{"id":17,"x":48,"y":705,"r":26,"hv":[2.982,1.103,1.378,2.99,6.624,7.196,6.693,2.767,1.715],"hh":[8.014,1.85,3.367,6.747,8.535,9.255,8.494,5.783,3.751],"ndvi":[0.136,0.153,0.625,0.812,0.807,0.817,0.796,0.278,0.251]},{"id":18,"x":399,"y":9,"r":20,"hv":[0.191,2.166,1.419,1.667,9.085,10.199,9.19,9.38,8.127],"hh":[0.819,5.145,3.823,3.929,10.541,13.121,12.776,12.897,11.737],"ndvi":[0.139,0.155,0.155,0.203,0.608,0.762,0.814,0.739,0.626]},{"id":19,"x":446,"y":226,"r":26,"hv":[1.64,2.631,1.723,2.7,3.818,1.401,2.432,1.468,1.831],"hh":[5.71,6.4,5.465,6.232,4.783,2.894,4.866,6.846,6.827],"ndvi":[0.827,0.836,0.639,0.799,0.558,0.296,0.234,0.138,0.141]},{"id":20,"x":280,"y":445,"r":26,"hv":[2.61,3.905,4.46,2.437,2.079,2.0,2.008,1.946,1.468],"hh":[5.526,8.222,9.141,6.998,6.642,6.555,6.228,6.511,5.539],"ndvi":[0.111,0.113,0.104,0.109,0.103,0.11,0.101,0.115,0.111]},{"id":21,"x":509,"y":772,"r":20,"hv":[0.552,0.558,0.886,0.684,1.578,2.915,4.022,5.807,4.496],"hh":[1.028,0.715,2.999,1.534,4.316,7.108,7.086,7.629,6.382],"ndvi":[0.134,0.129,0.124,0.135,0.737,0.771,0.82,0.752,0.631]},{"id":22,"x":306,"y":349,"r":24,"hv":[0.653,0.543,1.656,1.124,1.074,2.096,3.608,5.216,5.842],"hh":[1.636,1.23,5.255,5.243,3.463,4.965,6.597,8.534,9.46],"ndvi":[0.167,0.148,0.148,0.128,0.16,0.241,0.342,0.502,0.494]},{"id":23,"x":134,"y":783,"r":22,"hv":[0.595,0.693,0.858,0.873,1.757,1.949,3.752,4.283,3.896],"hh":[1.361,1.226,1.913,2.026,4.834,5.344,7.788,6.066,5.508],"ndvi":[0.157,0.135,0.14,0.141,0.758,0.804,0.814,0.729,0.588]},{"id":24,"x":329,"y":459,"r":26,"hv":[0.886,0.834,1.745,2.871,4.073,3.874,2.918,1.901,1.758],"hh":[1.996,1.517,2.876,4.64,9.01,9.194,8.39,6.54,6.133],"ndvi":[0.117,0.121,0.144,0.305,0.344,0.271,0.165,0.123,0.112]},{"id":25,"x":341,"y":411,"r":24,"hv":[0.898,1.048,1.643,2.937,4.177,4.771,4.197,3.378,2.249],"hh":[2.478,2.497,3.844,5.62,6.788,7.319,6.244,6.991,5.374],"ndvi":[0.21,0.182,0.196,0.228,0.299,0.372,0.342,0.239,0.188]},{"id":26,"x":480,"y":514,"r":14,"hv":[4.211,1.198,1.942,5.149,1.673,1.588,1.79,2.185,1.321],"hh":[8.989,1.123,5.552,9.145,5.869,2.777,4.828,4.14,2.886],"ndvi":[0.847,0.346,0.774,0.846,0.81,0.525,0.65,0.509,0.532]},{"id":27,"x":172,"y":845,"r":22,"hv":[2.146,1.79,2.401,3.08,3.076,2.563,2.332,2.784,1.757],"hh":[6.015,4.075,6.961,5.445,7.206,6.41,5.302,5.942,3.083],"ndvi":[0.676,0.766,0.712,0.655,0.817,0.674,0.683,0.656,0.512]},{"id":28,"x":424,"y":497,"r":14,"hv":[1.255,4.422,3.278,1.793,3.238,2.907,2.48,2.677,2.337],"hh":[3.631,8.542,7.129,4.941,7.942,6.482,6.899,5.476,5.97],"ndvi":[0.56,0.86,0.759,0.623,0.797,0.612,0.843,0.642,0.705]},{"id":29,"x":292,"y":397,"r":26,"hv":[1.289,1.288,1.977,2.251,2.942,3.283,4.873,5.178,5.229],"hh":[4.139,3.856,4.415,4.217,5.03,5.849,9.527,10.412,10.096],"ndvi":[0.152,0.176,0.152,0.188,0.276,0.278,0.285,0.248,0.217]},{"id":30,"x":751,"y":911,"r":16,"hv":[1.61,1.957,2.128,1.761,2.307,1.803,1.95,3.114,2.313],"hh":[4.201,4.63,5.277,3.395,4.843,4.033,4.81,6.418,4.809],"ndvi":[0.379,0.462,0.444,0.285,0.462,0.399,0.364,0.534,0.358]},{"id":31,"x":153,"y":739,"r":16,"hv":[0.63,0.661,2.397,1.043,1.701,2.783,4.877,7.425,6.554],"hh":[1.055,0.884,4.758,2.509,4.704,6.815,7.721,8.126,7.812],"ndvi":[0.165,0.142,0.145,0.172,0.782,0.82,0.831,0.787,0.684]},{"id":32,"x":754,"y":844,"r":18,"hv":[2.417,0.869,0.798,1.147,1.109,0.983,0.673,0.41,0.375],"hh":[5.301,3.4,3.537,3.676,3.908,2.128,2.022,1.804,1.751],"ndvi":[0.46,0.401,0.473,0.412,0.462,0.257,0.305,0.263,0.252]},{"id":33,"x":587,"y":695,"r":18,"hv":[1.334,2.53,1.038,1.289,1.227,1.609,1.103,2.216,2.804],"hh":[4.953,6.481,3.344,4.819,3.603,5.244,2.825,6.134,6.389],"ndvi":[0.672,0.694,0.407,0.66,0.486,0.655,0.472,0.646,0.668]},{"id":34,"x":870,"y":805,"r":14,"hv":[0.662,1.207,2.052,2.869,6.215,2.621,0.632,0.061,0.045],"hh":[2.653,3.34,5.311,5.565,7.893,4.954,1.905,0.623,0.587],"ndvi":[0.288,0.689,0.772,0.821,0.771,0.487,0.231,0.179,0.159]},{"id":35,"x":403,"y":420,"r":14,"hv":[1.971,1.895,2.584,2.451,4.386,1.93,1.426,3.555,1.972],"hh":[4.535,6.279,6.666,5.958,9.203,5.766,5.532,7.138,5.326],"ndvi":[0.547,0.827,0.868,0.531,0.863,0.549,0.83,0.609,0.72]},{"id":36,"x":524,"y":950,"r":14,"hv":[0.833,2.745,0.774,1.994,1.555,3.328,4.358,6.354,5.722],"hh":[2.675,5.333,2.195,5.176,3.545,7.542,8.105,10.293,8.771],"ndvi":[0.382,0.422,0.249,0.415,0.391,0.467,0.362,0.691,0.56]},{"id":37,"x":169,"y":524,"r":16,"hv":[6.308,6.381,5.492,4.11,0.753,0.662,0.791,0.728,0.737],"hh":[10.941,10.678,9.401,7.263,2.219,2.224,1.804,2.268,1.704],"ndvi":[0.607,0.642,0.593,0.392,0.208,0.209,0.189,0.218,0.184]}],"validation":{"pairs":342,"fields":38,"dates":9,"rho":0.5,"agreement":0.582,"confusion":{"both_active":79,"radar_only":9,"optical_only":134,"both_inactive":120},"fields_with_rho":38,"fields_positive_rho":37,"median_field_rho":0.72}};
+
+const fmap = document.getElementById("fmap");
+const fchart = document.getElementById("fchart");
+const fsel = document.getElementById("fsel");
+const showhh = document.getElementById("showhh");
+const fstat = document.getElementById("fstat");
+const NS = "http://www.w3.org/2000/svg";
+
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+// Spearman correlation: Pearson correlation of the ranks (ties get the average rank).
+function ranks(a) {
+  const idx = a.map((v, i) => i).sort((i, j) => a[i] - a[j]);
+  const r = new Array(a.length);
+  for (let i = 0; i < idx.length; ) {
+    let j = i;
+    while (j + 1 < idx.length && a[idx[j + 1]] === a[idx[i]]) j++;
+    for (let k = i; k <= j; k++) r[idx[k]] = (i + j) / 2;
+    i = j + 1;
+  }
+  return r;
+}
+function spearman(x, y) {
+  const keep = x.map((v, i) => v !== null && y[i] !== null);
+  const a = ranks(x.filter((v, i) => keep[i])), b = ranks(y.filter((v, i) => keep[i]));
+  const n = a.length, ma = a.reduce((s, v) => s + v, 0) / n, mb = b.reduce((s, v) => s + v, 0) / n;
+  let sab = 0, saa = 0, sbb = 0;
+  for (let i = 0; i < n; i++) { sab += (a[i] - ma) * (b[i] - mb); saa += (a[i] - ma) ** 2; sbb += (b[i] - mb) ** 2; }
+  return sab / Math.sqrt(saa * sbb);
+}
+
+
+FIELDS.fields.forEach(function (f) {
+  const g = el("g", {}, fmap);
+  const c = el("circle", { cx: f.x, cy: f.y, r: f.r, "data-id": f.id }, g);
+  el("title", {}, c).textContent = "Field " + f.id;
+  el("text", { x: f.x, y: f.y }, g).textContent = f.id;
+  c.addEventListener("click", function () { choose(f.id); });
+  const o = document.createElement("option");
+  o.value = f.id; o.textContent = "Field " + f.id;
+  fsel.appendChild(o);
+});
+fsel.addEventListener("change", function () { choose(Number(fsel.value)); });
+showhh.addEventListener("change", function () { choose(Number(fsel.value)); });
+
+// Chart layout
+const X0 = 58, X1 = 580, Y0 = 20, Y1 = 300;
+const t = FIELDS.dates.map(d => Date.parse(d));
+const tmin = Date.parse("2026-06-12"), tmax = Date.parse("2026-10-24");
+const xs = v => X0 + (v - tmin) / (tmax - tmin) * (X1 - X0);
+const DB = [0, 14];
+const yd = v => Y1 - (v - DB[0]) / (DB[1] - DB[0]) * (Y1 - Y0);
+const yn = v => Y1 - v * (Y1 - Y0);
+
+function drawAxes() {
+  for (let v = 0; v <= 14; v += 2) {
+    el("line", { x1: X0, x2: X1, y1: yd(v), y2: yd(v), stroke: "#26332a" }, fchart);
+    el("text", { x: X0 - 8, y: yd(v) + 4, "text-anchor": "end" }, fchart).textContent = v;
+  }
+  for (let v = 0; v <= 1.001; v += 0.2) {
+    el("text", { x: X1 + 8, y: yn(v) + 4 }, fchart).textContent = v.toFixed(1);
+  }
+  ["2026-07-01", "2026-08-01", "2026-09-01", "2026-10-01"].forEach(function (d) {
+    const x = xs(Date.parse(d));
+    el("line", { x1: x, x2: x, y1: Y0, y2: Y1, stroke: "#26332a" }, fchart);
+    el("text", { x: x, y: Y1 + 18, "text-anchor": "middle" }, fchart).textContent =
+      new Date(d).toLocaleString("en", { month: "short" }) + " 1";
+  });
+  el("rect", { x: X0, y: Y0, width: X1 - X0, height: Y1 - Y0, fill: "none", stroke: "#3a4a3e" }, fchart);
+  el("text", { x: (X0 + X1) / 2, y: Y1 + 40, "text-anchor": "middle" }, fchart).textContent = "Acquisition date (2026)";
+  el("text", { x: 16, y: (Y0 + Y1) / 2, "text-anchor": "middle", transform: "rotate(-90 16 " + (Y0 + Y1) / 2 + ")" }, fchart).textContent = "Backscatter above desert (dB)";
+  el("text", { x: 630, y: (Y0 + Y1) / 2, "text-anchor": "middle", transform: "rotate(90 630 " + (Y0 + Y1) / 2 + ")" }, fchart).textContent = "NDVI";
+}
+
+function series(vals, y, color, dash, shape) {
+  let d = "";
+  vals.forEach(function (v, i) {
+    if (v === null) return;
+    d += (d ? " L " : "M ") + xs(t[i]) + " " + y(v);
+  });
+  el("path", { d: d, fill: "none", stroke: color, "stroke-width": 2.5, "stroke-dasharray": dash || "" }, fchart);
+  vals.forEach(function (v, i) {
+    if (v === null) return;
+    const p = shape === "sq"
+      ? el("rect", { x: xs(t[i]) - 4, y: y(v) - 4, width: 8, height: 8, fill: color }, fchart)
+      : el("circle", { cx: xs(t[i]), cy: y(v), r: 4.5, fill: color }, fchart);
+    el("title", {}, p).textContent = FIELDS.dates[i] + ": " + v.toFixed(2);
+  });
+}
+
+function choose(id) {
+  const f = FIELDS.fields[id];
+  fsel.value = id;
+  fmap.querySelectorAll("circle").forEach(c => c.classList.toggle("on", Number(c.dataset.id) === id));
+  fchart.innerHTML = "";
+  drawAxes();
+  el("line", { x1: X0, x2: X1, y1: yd(4), y2: yd(4), stroke: "#c8f031", "stroke-dasharray": "2 4", opacity: 0.6 }, fchart);
+  el("text", { x: X1 - 4, y: yd(4) - 6, "text-anchor": "end" }, fchart).textContent = "4 dB: active";
+  if (showhh.checked) series(f.hh, yd, "#6ec6ff", "", "sq");
+  series(f.hv, yd, "#c8f031", "");
+  series(f.ndvi, yn, "#ffffff", "6 5", "sq");
+  const peak = f.hv.indexOf(Math.max.apply(null, f.hv.filter(v => v !== null)));
+  fstat.textContent = "Field " + id + ": radar HV and NDVI Spearman ρ = " + spearman(f.hv, f.ndvi).toFixed(2) +
+    " over " + f.hv.filter(v => v !== null).length + " dates. HV peaked on " + FIELDS.dates[peak] + ".";
+}
+choose(1);
+</script>
+</body>
+</html>
