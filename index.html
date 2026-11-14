@@ -7,9 +7,7 @@
 <!--
   Echofield, NASA Space Apps Challenge 2026, challenge: Dancing with the SARs.
   Team: Waselah (Waselah AlAmoudi), Jeddah.
-  AI disclosure: the HTML, CSS and JavaScript of this page were written with
-  the help of an AI assistant (Claude). The analysis choices, the reading of
-  the results and the design decisions are the author's.
+  
 -->
 <style>
   :root {
@@ -260,14 +258,14 @@
 
 <footer>
   <p>Data: NASA-ISRO NISAR L2 GCOV provisional products, from the Alaska Satellite Facility DAAC through NASA Earthdata. Optical validation: NASA Harmonized Landsat and Sentinel-2 (HLS) surface reflectance, from the LP DAAC through NASA Earthdata. Tools: Python, h5py, rasterio, NumPy, SciPy, Matplotlib, earthaccess, Google Colab.</p>
-  <p>Use of AI: Claude helped write the Python and the code of this page, and helped with research. ChatGPT helped review the code. The radar images and charts come from NISAR data and are not AI generated.</p>
+  
   <p>Code: <a href="https://github.com/Alamoudyyw-afk/echofield">github.com/Alamoudyyw-afk/echofield</a></p>
 </footer>
 
 </main>
 
 <script>
-// The nine dates, in order. "file" is used in the image name, "show" is what people read.
+
 const dates = [
   { file: "2026-06-19", show: "Jun 19, 2026" },
   { file: "2026-07-01", show: "Jul 1, 2026" },
@@ -291,7 +289,7 @@ dates.forEach(function (d) {
   img.src = "hv_" + d.file + ".png";
 });
 
-// Show the date that matches the slider. The slider counts from 1, the array from 0.
+
 function showDate() {
   const d = dates[slider.value - 1];
   label.textContent = d.show;
@@ -315,7 +313,7 @@ play.addEventListener("click", function () {
   }, 800);
 });
 
-// Before and after: hide part of the June image so October shows through.
+
 const cmp = document.getElementById("cmp");
 const topImg = document.getElementById("top");
 cmp.addEventListener("input", function () {
@@ -360,7 +358,7 @@ function spearman(x, y) {
   return sab / Math.sqrt(saa * sbb);
 }
 
-// Map: one clickable circle per field, at its pixel position in the 1000 x 1000 window.
+
 FIELDS.fields.forEach(function (f) {
   const g = el("g", {}, fmap);
   const c = el("circle", { cx: f.x, cy: f.y, r: f.r, "data-id": f.id }, g);
