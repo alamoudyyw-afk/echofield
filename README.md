@@ -55,7 +55,7 @@ Center-pivot farms in Al Jouf draw on groundwater that does not refill, so knowi
 
 - 33 regions where HV increased and 19 where it decreased between June 19 and October 17.
 - Active vegetated area rose from 19.4 km² to 29.1 km² (4 dB threshold); the rise holds at 3 and 5 dB.
-- Field detection: precision 69% (38 of 55 candidates confirmed by visual inspection); recall about 44% in a 6 km sample box (8 of about 18 fields). Counts describe detected fields, not every field.
+- Field detection: 38 of 55 proposed circles passed visual inspection (candidate acceptance rate 69%, not an independently validated precision); approximate recall about 44% from one 6 km sample box counted by eye (8 of about 18 fields). Counts describe detected fields, not every field.
 - Active confirmed fields: 4 in June, peak of 17 on October 5.
 - Radar against optical NDVI: pooled Spearman ρ = 0.50 over 342 field-date pairs; per field, 37 of 38 positive, median ρ = 0.72; 58% agreement on active or inactive (Cohen's kappa 0.25). When radar says active, optical agrees 90% of the time; almost all disagreement is green fields below the radar threshold. Agreement under 2, 3 and 5 dB thresholds is reported on the site; 4 dB was fixed before the comparison.
 
